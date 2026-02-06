@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Zebra Scanner App</title>
+
+  <!-- Required for Enterprise Browser -->
+  <meta http-equiv="scanner" content="enabled">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    button {
+      font-size: 18px;
+      padding: 12px;
+      margin: 8px 0;
+      width: 100%;
+    }
+    ul {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Zebra Barcode Scanner</h2>
+
+  <button onclick="startScan()">📷 Scan Barcode</button>
+  <button onclick="downloadCSV()">💾 Save CSV</button>
+
+  <ul id="scanList"></ul>
+
+  <script>
+    const scannedSet = new Set();
+    const scanList = document.getElementById("scanList");
+
+    function startScan() {
+      if (!window.Barcode) {
+        alert("Barcode API not available. Use Zebra Enterprise Browser.");
+        return;
+      }
+
+      Barcode.take(handleScan);
+    }
+
+    function handleScan(result) {
+      if (!result || result.status !== "ok") {
+        return;
+      }
+
+      const code = result.data.trim();
+
+      if (scannedSet.has(code)) {
+        alert("Duplicate scan: " + code);
+        return;
+      }
+
+      scannedSet.add(code);
+
+      const li = document.createElement("li");
+      li.textContent = code;
+      scanList.appendChild(li);
+    }
+
+    function downloadCSV() {
+      if (scannedSet.size === 0) {
+        alert("No barcodes scanned");
+        return;
+      }
+
+      let csv = "Barcode\n";
+      scannedSet.forEach(code => {
+        csv += code + "\n";
+      });
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "scanned_barcodes.csv";
+      a.click();
+
+      URL.revokeObjectURL(url);
+    }
+  </script>
+
+</body>
+</html>
