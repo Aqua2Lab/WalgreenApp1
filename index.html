@@ -2,69 +2,114 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Zebra Scanner App</title>
-
-  <!-- Required for Enterprise Browser -->
-  <meta http-equiv="scanner" content="enabled">
+  <title>Zebra Barcode Scanner (Chrome)</title>
 
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
     }
+
     button {
       font-size: 18px;
       padding: 12px;
       margin: 8px 0;
       width: 100%;
     }
+
+    input {
+      position: absolute;
+      left: -1000px; /* hidden but focusable */
+    }
+
     ul {
       margin-top: 20px;
       font-size: 18px;
+    }
+
+    .status {
+      font-size: 16px;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    .on {
+      color: green;
+    }
+
+    .off {
+      color: red;
     }
   </style>
 </head>
 <body>
 
-  <h2>Zebra Barcode Scanner</h2>
+  <h2>Zebra Barcode Scanner (Chrome)</h2>
 
-  <button onclick="startScan()">📷 Scan Barcode</button>
+  <button onclick="enableScan()">📷 Scan Barcode</button>
   <button onclick="downloadCSV()">💾 Save CSV</button>
+
+  <div id="status" class="status off">Scan mode: OFF</div>
+
+  <!-- Hidden input to capture scanner keyboard input -->
+  <input type="text" id="scannerInput" />
 
   <ul id="scanList"></ul>
 
   <script>
-    const scannedSet = new Set();
+    const scannerInput = document.getElementById("scannerInput");
     const scanList = document.getElementById("scanList");
+    const statusDiv = document.getElementById("status");
 
-    function startScan() {
-      if (!window.Barcode) {
-        alert("Barcode API not available. Use Zebra Enterprise Browser.");
-        return;
-      }
+    const scannedSet = new Set();
+    let scanEnabled = false;
 
-      Barcode.take(handleScan);
+    function enableScan() {
+      scanEnabled = true;
+      statusDiv.textContent = "Scan mode: ON";
+      statusDiv.className = "status on";
+
+      scannerInput.value = "";
+      scannerInput.focus();
+
+      // Auto-disable scan mode after 5 seconds (optional safety)
+      setTimeout(() => {
+        scanEnabled = false;
+        statusDiv.textContent = "Scan mode: OFF";
+        statusDiv.className = "status off";
+      }, 5000);
     }
 
-    function handleScan(result) {
-      if (!result || result.status !== "ok") {
-        return;
+    scannerInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        const code = scannerInput.value.trim();
+        scannerInput.value = "";
+
+        if (!scanEnabled) {
+          // Ignore scans unless Scan button was pressed
+          return;
+        }
+
+        if (code === "") return;
+
+        if (scannedSet.has(code)) {
+          alert("Duplicate scan: " + code);
+          return;
+        }
+
+        scannedSet.add(code);
+
+        const li = document.createElement("li");
+        li.textContent = code;
+        scanList.appendChild(li);
+
+        // Turn off scan mode after successful scan
+        scanEnabled = false;
+        statusDiv.textContent = "Scan mode: OFF";
+        statusDiv.className = "status off";
       }
-
-      const code = result.data.trim();
-
-      if (scannedSet.has(code)) {
-        alert("Duplicate scan: " + code);
-        return;
-      }
-
-      scannedSet.add(code);
-
-      const li = document.createElement("li");
-      li.textContent = code;
-      scanList.appendChild(li);
-    }
-
+    });
+    
     function downloadCSV() {
       if (scannedSet.size === 0) {
         alert("No barcodes scanned");
