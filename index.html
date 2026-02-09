@@ -1,137 +1,112 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Zebra Barcode Scanner (Chrome)</title>
+<script>
+  const scanList = document.getElementById("scanList");
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
+  let buffer = "";
+  let scanned = new Set();
 
-    button {
-      font-size: 18px;
-      padding: 12px;
-      margin: 8px 0;
-      width: 100%;
-    }
+  /* ===============================
+     LOCAL STORAGE HELPERS
+     =============================== */
+  const STORAGE_KEY = "zebra_scans";
 
-    input {
-      position: absolute;
-      left: -1000px; /* hidden but focusable */
-    }
+  function saveLocally() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...scanned]));
+  }
 
-    ul {
-      margin-top: 20px;
-      font-size: 18px;
-    }
+  function loadLocally() {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (!data) return;
 
-    .status {
-      font-size: 16px;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-
-    .on {
-      color: green;
-    }
-
-    .off {
-      color: red;
-    }
-  </style>
-</head>
-<body>
-
-  <h2>Zebra Barcode Scanner (Chrome)</h2>
-
-  <button onclick="enableScan()">📷 Scan Barcode</button>
-  <button onclick="downloadCSV()">💾 Save CSV</button>
-
-  <div id="status" class="status off">Scan mode: OFF</div>
-
-  <!-- Hidden input to capture scanner keyboard input -->
-  <input type="text" id="scannerInput" />
-
-  <ul id="scanList"></ul>
-
-  <script>
-    const scannerInput = document.getElementById("scannerInput");
-    const scanList = document.getElementById("scanList");
-    const statusDiv = document.getElementById("status");
-
-    const scannedSet = new Set();
-    let scanEnabled = false;
-
-    function enableScan() {
-      scanEnabled = true;
-      statusDiv.textContent = "Scan mode: ON";
-      statusDiv.className = "status on";
-
-      scannerInput.value = "";
-      scannerInput.focus();
-
-      // Auto-disable scan mode after 5 seconds (optional safety)
-      setTimeout(() => {
-        scanEnabled = false;
-        statusDiv.textContent = "Scan mode: OFF";
-        statusDiv.className = "status off";
-      }, 5000);
-    }
-
-    scannerInput.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        const code = scannerInput.value.trim();
-        scannerInput.value = "";
-
-        if (!scanEnabled) {
-          // Ignore scans unless Scan button was pressed
-          return;
-        }
-
-        if (code === "") return;
-
-        if (scannedSet.has(code)) {
-          alert("Duplicate scan: " + code);
-          return;
-        }
-
-        scannedSet.add(code);
-
-        const li = document.createElement("li");
-        li.textContent = code;
-        scanList.appendChild(li);
-
-        // Turn off scan mode after successful scan
-        scanEnabled = false;
-        statusDiv.textContent = "Scan mode: OFF";
-        statusDiv.className = "status off";
-      }
+    const arr = JSON.parse(data);
+    arr.forEach(code => {
+      scanned.add(code);
+      appendToList(code);
     });
-    
-    function downloadCSV() {
-      if (scannedSet.size === 0) {
-        alert("No barcodes scanned");
-        return;
-      }
+  }
 
-      let csv = "Barcode\n";
-      scannedSet.forEach(code => {
-        csv += code + "\n";
-      });
+  function appendToList(code) {
+    const li = document.createElement("li");
+    li.textContent = code;
+    scanList.prepend(li);
+  }
 
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
+  /* ===============================
+     SCANNER INPUT (GLOBAL)
+     =============================== */
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Shift" || e.key === "Alt" || e.key === "Control") return;
 
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "scanned_barcodes.csv";
-      a.click();
+    if (e.key === "Enter") {
+      const code = buffer.trim();
+      buffer = "";
 
-      URL.revokeObjectURL(url);
+      if (!code) return;
+
+      if (scanned.has(code)) return;
+
+      scanned.add(code);
+      appendToList(code);
+      saveLocally();
+    } else {
+      buffer += e.key;
     }
-  </script>
+  });
 
-</body>
-</html>
+  /* ===============================
+     EXIT / NAVIGATION PROTECTION
+     =============================== */
+
+  // Back / refresh / close tab
+  window.addEventListener("beforeunload", function (e) {
+    if (scanned.size === 0) return;
+
+    saveLocally();
+    e.preventDefault();
+    e.returnValue = ""; // Required for Chrome
+  });
+
+  // App background / tab switch
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      saveLocally();
+    }
+  });
+
+  // Android back button (history trap)
+  history.pushState(null, "", location.href);
+  window.addEventListener("popstate", function () {
+    saveLocally();
+    alert("Scans saved locally. Use Export CSV to download.");
+    history.pushState(null, "", location.href);
+  });
+
+  /* ===============================
+     CSV EXPORT (Downloads)
+     =============================== */
+  function downloadCSV() {
+    if (scanned.size === 0) {
+      alert("No scans to export");
+      return;
+    }
+
+    let csv = "Barcode\n";
+    scanned.forEach(code => {
+      csv += code + "\n";
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "scanned_barcodes.csv";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  /* ===============================
+     RESTORE ON LOAD
+     =============================== */
+  window.onload = loadLocally;
+</script>
